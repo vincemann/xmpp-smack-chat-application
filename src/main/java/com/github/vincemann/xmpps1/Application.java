@@ -26,6 +26,8 @@ public class Application {
     private static ChatManager chatManager;
     private static String domain;
     private static Boolean chatting = Boolean.FALSE;
+    private static Boolean started_chat = Boolean.FALSE;
+    private static Scanner scanner;
 
     public static void main(String[] args) throws IOException, InterruptedException, XMPPException, SmackException {
         // username password partnerJID host port connect
@@ -41,6 +43,7 @@ public class Application {
         connection = connectAndLogin(username, password, domain, host, port);
         chatManager = ChatManager.getInstanceFor(connection);
         // start new thread waiting for incoming chats
+        scanner = new Scanner(System.in);
         waitForChat();
         printMenu();
         handleMenuInput();
@@ -49,13 +52,14 @@ public class Application {
     public static Thread startChat(String chatPartner) {
         Thread thread = new Thread(() -> {
             String jidString  = chatPartner+"@"+domain;
-            EntityBareJid jid = null;
+            EntityBareJid jid;
             try {
                 jid = JidCreate.entityBareFrom(jidString);
             } catch (XmppStringprepException e) {
                 throw new RuntimeException(e);
             }
-            System.err.println("Creating Chat with: " + jid.toString());
+            System.err.println("----- Creating Chat with: " + jid.toString());
+            started_chat = Boolean.TRUE;
             Chat chat = chatManager.createChat(jid, new LoggingMsgListener());
             enterChatLoop(chat);
         });
@@ -64,14 +68,15 @@ public class Application {
     }
 
     public static void handleMenuInput() throws InterruptedException {
-        Scanner scanner = new Scanner(System.in);
+//        scanner = new Scanner(System.in);
         while (true) {
-            String menuInput = scanner.next();
+            String menuInput = scanner.nextLine();
             if (menuInput.startsWith(OPEN_CHAT_MENU_OPTION)){
                 String chatPartner = menuInput.split(" ")[1];
-                startChat(chatPartner);
+                Thread thread = startChat(chatPartner);
 //                // wait for chat to finish
-//                chatThread.join();
+                thread.join();
+                System.err.println("done chatting with initialized chat");
 //                printMenu();
             }else {
                 System.out.println("Invalid input");
@@ -81,11 +86,12 @@ public class Application {
 
     public static void printMenu(){
         StringBuilder sb = new StringBuilder();
+        sb.append("Options:").append(System.lineSeparator());
         sb.append(OPEN_CHAT_MENU_OPTION).append(" user").append(System.lineSeparator());
         System.out.println(sb.toString());
     }
 
-    public static Thread waitForChat(){
+    public static Thread waitForChat() throws InterruptedException {
         Thread thread = new Thread(() -> {
             final Chat[] gChat = {null};
             final Boolean[] chatCreated = {Boolean.FALSE};
@@ -94,6 +100,11 @@ public class Application {
                     new ChatManagerListener() {
                         @Override
                         public void chatCreated(Chat chat, boolean createdLocally) {
+                            if (started_chat){
+                                System.out.println("Started chat, ignoring handler");
+                                started_chat=Boolean.FALSE;
+                                return;
+                            }
                             gChat[0] = chat;
                             System.err.println("-----New Chat created");
                             chat.addMessageListener(new LoggingMsgListener());
@@ -111,9 +122,9 @@ public class Application {
                 }
             }
             enterChatLoop(gChat[0]);
-//            return gChat[0];
         });
         thread.start();
+        Thread.sleep(100);
         return thread;
     }
 
@@ -158,12 +169,11 @@ public class Application {
     public static void enterChatLoop(Chat chat)  {
         waitForFreeChat();
         System.err.println("Entering chat loop");
-        Scanner scanner = new Scanner(System.in);
+//        scanner = new Scanner(System.in);
         while (true) {
-            String msg = scanner.next();
+            String msg = scanner.nextLine();
             if (msg.equals("q")) {
                 chat.close();
-                scanner.close();
                 doneChatting();
                 break;
             }
@@ -180,6 +190,7 @@ public class Application {
     }
 
     public static synchronized void doneChatting(){
+        System.out.println("done chatting");
         chatting = Boolean.FALSE;
     }
 
@@ -192,6 +203,7 @@ public class Application {
                 e.printStackTrace();
             }
         }
+        System.out.println("start chatting");
         chatting = Boolean.TRUE;
     }
 

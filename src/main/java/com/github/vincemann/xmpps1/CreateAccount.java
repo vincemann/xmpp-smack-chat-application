@@ -9,8 +9,6 @@ import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration;
 import org.jivesoftware.smackx.iqregister.AccountManager;
 import org.jxmpp.stringprep.XmppStringprepException;
 
-import static com.github.vincemann.xmpps1.Application.XMPP_DOMAIN;
-
 public class CreateAccount {
 
 //    public static void main(String[] args) throws XmppStringprepException {
