@@ -4,30 +4,33 @@ import org.jivesoftware.smack.AbstractXMPPConnection;
 import org.jivesoftware.smack.ConnectionConfiguration;
 import org.jivesoftware.smack.SmackException;
 import org.jivesoftware.smack.XMPPException;
-import org.jivesoftware.smack.chat.Chat;
-import org.jivesoftware.smack.chat.ChatManager;
-import org.jivesoftware.smack.chat.ChatManagerListener;
-import org.jivesoftware.smack.chat.ChatMessageListener;
+import org.jivesoftware.smack.chat2.Chat;
+import org.jivesoftware.smack.chat2.ChatManager;
+import org.jivesoftware.smack.chat2.IncomingChatMessageListener;
 import org.jivesoftware.smack.packet.Message;
+import org.jivesoftware.smack.packet.StreamOpen;
 import org.jivesoftware.smack.tcp.XMPPTCPConnection;
 import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration;
 import org.jxmpp.jid.EntityBareJid;
 import org.jxmpp.jid.impl.JidCreate;
 import org.jxmpp.stringprep.XmppStringprepException;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.Scanner;
 
 public class Application {
 
-//    public static final String XMPP_DOMAIN = "debian.local";
-    private static final String OPEN_CHAT_MENU_OPTION = "open-chat";
+    //    public static final String XMPP_DOMAIN = "debian.local";
+    private static final String OPEN_CHAT_MENU_OPTION = "c";
     private static AbstractXMPPConnection connection;
     private static ChatManager chatManager;
     private static String domain;
     private static Boolean chatting = Boolean.FALSE;
-    private static Boolean started_chat = Boolean.FALSE;
-    private static Scanner scanner;
+    private static Boolean startedChat = Boolean.FALSE;
+//    private static volatile Scanner menuScanner;
 
     public static void main(String[] args) throws IOException, InterruptedException, XMPPException, SmackException {
         // username password partnerJID host port connect
@@ -42,16 +45,16 @@ public class Application {
 
         connection = connectAndLogin(username, password, domain, host, port);
         chatManager = ChatManager.getInstanceFor(connection);
+        chatManager.addIncomingListener(new LoggingIncomingMsgListener());
         // start new thread waiting for incoming chats
-        scanner = new Scanner(System.in);
         waitForChat();
         printMenu();
         handleMenuInput();
     }
 
-    public static Thread startChat(String chatPartner) {
+    public static Thread startChat(String chatPartner, Scanner scanner) {
         Thread thread = new Thread(() -> {
-            String jidString  = chatPartner+"@"+domain;
+            String jidString = chatPartner + "@" + domain;
             EntityBareJid jid;
             try {
                 jid = JidCreate.entityBareFrom(jidString);
@@ -59,8 +62,8 @@ public class Application {
                 throw new RuntimeException(e);
             }
             System.err.println("----- Creating Chat with: " + jid.toString());
-            started_chat = Boolean.TRUE;
-            Chat chat = chatManager.createChat(jid, new LoggingMsgListener());
+            startedChat = Boolean.TRUE;
+            Chat chat = chatManager.chatWith(jid);
             enterChatLoop(chat);
         });
         thread.start();
@@ -68,23 +71,25 @@ public class Application {
     }
 
     public static void handleMenuInput() throws InterruptedException {
-//        scanner = new Scanner(System.in);
         while (true) {
+            Scanner scanner = new Scanner(System.in);
+//            menuScanner = scanner;
             String menuInput = scanner.nextLine();
-            if (menuInput.startsWith(OPEN_CHAT_MENU_OPTION)){
+            if (menuInput.startsWith(OPEN_CHAT_MENU_OPTION)) {
                 String chatPartner = menuInput.split(" ")[1];
-                Thread thread = startChat(chatPartner);
+                Thread thread = startChat(chatPartner, scanner);
+                scanner.reset();
 //                // wait for chat to finish
                 thread.join();
                 System.err.println("done chatting with initialized chat");
 //                printMenu();
-            }else {
+            } else {
                 System.out.println("Invalid input");
             }
         }
     }
 
-    public static void printMenu(){
+    public static void printMenu() {
         StringBuilder sb = new StringBuilder();
         sb.append("Options:").append(System.lineSeparator());
         sb.append(OPEN_CHAT_MENU_OPTION).append(" user").append(System.lineSeparator());
@@ -96,23 +101,19 @@ public class Application {
             final Chat[] gChat = {null};
             final Boolean[] chatCreated = {Boolean.FALSE};
             System.err.println("Waiting for chat");
-            chatManager.addChatListener(
-                    new ChatManagerListener() {
-                        @Override
-                        public void chatCreated(Chat chat, boolean createdLocally) {
-                            if (started_chat){
-                                System.out.println("Started chat, ignoring handler");
-                                started_chat=Boolean.FALSE;
-                                return;
-                            }
-                            gChat[0] = chat;
-                            System.err.println("-----New Chat created");
-                            chat.addMessageListener(new LoggingMsgListener());
-                            chatCreated[0] = Boolean.TRUE;
-                            System.err.println("-----" + chat.toString());
-
-                        }
-                    });
+            chatManager.addIncomingListener(new IncomingChatMessageListener() {
+                @Override
+                public void newIncomingMessage(EntityBareJid entityBareJid, Message message, org.jivesoftware.smack.chat2.Chat chat) {
+                    if (startedChat){
+//                        System.out.println("Started chat, ignoring handler");
+                        startedChat=Boolean.FALSE;
+                        return;
+                    }
+                    gChat[0] = chat;
+                    chatCreated[0] = Boolean.TRUE;
+//                    System.err.println("-----" + chat.toString());
+                }
+            });
             // this should stop as soon as new chat is created
             while (!chatCreated[0]) {
                 try {
@@ -150,37 +151,32 @@ public class Application {
         connection.connect();
         connection.login();
         System.err.println("Logged in to server as: " + connection.getUser().toString());
-        if(connection.isAuthenticated() )
-        {
+        if (connection.isAuthenticated()) {
             System.err.println("Auth done");
         }
         return connection;
     }
 
-    static class LoggingMsgListener implements ChatMessageListener{
-        @Override
-        public void processMessage(Chat chat, Message message) {
-            System.out.println("Received message: "
-                    + (message != null ? message.getBody() : "NULL" + " | from " + chat.getParticipant().toString()));
-        }
-    }
-
     // replace with chat window opening
-    public static void enterChatLoop(Chat chat)  {
+    public static void enterChatLoop(Chat chat) {
         waitForFreeChat();
         System.err.println("Entering chat loop");
-//        scanner = new Scanner(System.in);
+//        menuScanner.reset();
+//        BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+        Scanner scanner = new Scanner(System.in);
+        scanner.reset();
         while (true) {
-            String msg = scanner.nextLine();
-            if (msg.equals("q")) {
-                chat.close();
-                doneChatting();
-                break;
-            }
-            System.err.println("Sending msg: " + msg);
             try {
-                chat.sendMessage(msg);
-            } catch (SmackException.NotConnectedException e) {
+                String msg = scanner.nextLine();
+                if (msg.equals("q")) {
+                    doneChatting();
+                    break;
+                }
+                System.err.println("Sending msg: " + msg);
+                chat.send(msg);
+            }/* catch (IOException e) {
+                e.printStackTrace();
+            } */catch (SmackException.NotConnectedException e) {
                 e.printStackTrace();
             } catch (InterruptedException e) {
                 e.printStackTrace();
@@ -189,22 +185,30 @@ public class Application {
 
     }
 
-    public static synchronized void doneChatting(){
+    public static synchronized void doneChatting() {
         System.out.println("done chatting");
         chatting = Boolean.FALSE;
     }
 
-    public static synchronized void waitForFreeChat(){
-        while (chatting){
+    public static synchronized void waitForFreeChat() {
+        while (chatting) {
             try {
                 System.out.println("Waiting for ending chat...");
-                Thread.sleep(1000);
+                Thread.sleep(3000);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
         }
         System.out.println("start chatting");
         chatting = Boolean.TRUE;
+    }
+
+    static class LoggingIncomingMsgListener implements IncomingChatMessageListener {
+        @Override
+        public void newIncomingMessage(EntityBareJid entityBareJid, Message message, Chat chat) {
+            System.out.println("Received message: "
+                    + (message != null ? message.getBody() : "NULL" + " | from " + entityBareJid));
+        }
     }
 
 //    /**
