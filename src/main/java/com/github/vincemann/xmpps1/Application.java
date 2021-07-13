@@ -1,57 +1,131 @@
 package com.github.vincemann.xmpps1;
 
-import org.apache.maven.plugin.logging.Log;
-import org.jivesoftware.smack.*;
+import org.jivesoftware.smack.AbstractXMPPConnection;
+import org.jivesoftware.smack.ConnectionConfiguration;
+import org.jivesoftware.smack.SmackException;
+import org.jivesoftware.smack.XMPPException;
 import org.jivesoftware.smack.chat.Chat;
 import org.jivesoftware.smack.chat.ChatManager;
 import org.jivesoftware.smack.chat.ChatManagerListener;
 import org.jivesoftware.smack.chat.ChatMessageListener;
-import org.jivesoftware.smack.filter.StanzaFilter;
 import org.jivesoftware.smack.packet.Message;
-import org.jivesoftware.smack.packet.Presence;
-import org.jivesoftware.smack.packet.Stanza;
-import org.jivesoftware.smack.roster.Roster;
-import org.jivesoftware.smack.roster.RosterEntry;
 import org.jivesoftware.smack.tcp.XMPPTCPConnection;
 import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration;
-import org.jivesoftware.smack.util.stringencoder.Base64;
-import org.jxmpp.jid.BareJid;
 import org.jxmpp.jid.EntityBareJid;
 import org.jxmpp.jid.impl.JidCreate;
+import org.jxmpp.stringprep.XmppStringprepException;
 
 import java.io.IOException;
-import java.util.Collection;
 import java.util.Scanner;
 
 public class Application {
 
-    public static final String XMPP_DOMAIN = "debian.local";
+//    public static final String XMPP_DOMAIN = "debian.local";
+    private static final String OPEN_CHAT_MENU_OPTION = "open-chat";
+    private static AbstractXMPPConnection connection;
+    private static ChatManager chatManager;
+    private static String domain;
+    private static Boolean chatting = Boolean.FALSE;
 
     public static void main(String[] args) throws IOException, InterruptedException, XMPPException, SmackException {
         // username password partnerJID host port connect
         int index = 0;
         String username = args[index++];
         String password = args[index++];
-        String device = args[index++];
-        String partnerJid = args[index++];
+        domain = args[index++];
+//        String partnerJid = args[index++];
         String host = args[index++];
         String port = args[index++];
-        String writeMsg = args[index++];
+//        String writeMsg = args[index++];
 
-        System.err.println("Write msg:" + writeMsg);
+        connection = connectAndLogin(username, password, domain, host, port);
+        chatManager = ChatManager.getInstanceFor(connection);
+        // start new thread waiting for incoming chats
+        waitForChat();
+        printMenu();
+        handleMenuInput();
+    }
 
+    public static Thread startChat(String chatPartner) {
+        Thread thread = new Thread(() -> {
+            String jidString  = chatPartner+"@"+domain;
+            EntityBareJid jid = null;
+            try {
+                jid = JidCreate.entityBareFrom(jidString);
+            } catch (XmppStringprepException e) {
+                throw new RuntimeException(e);
+            }
+            System.err.println("Creating Chat with: " + jid.toString());
+            Chat chat = chatManager.createChat(jid, new LoggingMsgListener());
+            enterChatLoop(chat);
+        });
+        thread.start();
+        return thread;
+    }
 
+    public static void handleMenuInput() throws InterruptedException {
+        Scanner scanner = new Scanner(System.in);
+        while (true) {
+            String menuInput = scanner.next();
+            if (menuInput.startsWith(OPEN_CHAT_MENU_OPTION)){
+                String chatPartner = menuInput.split(" ")[1];
+                startChat(chatPartner);
+//                // wait for chat to finish
+//                chatThread.join();
+//                printMenu();
+            }else {
+                System.out.println("Invalid input");
+            }
+        }
+    }
 
+    public static void printMenu(){
+        StringBuilder sb = new StringBuilder();
+        sb.append(OPEN_CHAT_MENU_OPTION).append(" user").append(System.lineSeparator());
+        System.out.println(sb.toString());
+    }
+
+    public static Thread waitForChat(){
+        Thread thread = new Thread(() -> {
+            final Chat[] gChat = {null};
+            final Boolean[] chatCreated = {Boolean.FALSE};
+            System.err.println("Waiting for chat");
+            chatManager.addChatListener(
+                    new ChatManagerListener() {
+                        @Override
+                        public void chatCreated(Chat chat, boolean createdLocally) {
+                            gChat[0] = chat;
+                            System.err.println("-----New Chat created");
+                            chat.addMessageListener(new LoggingMsgListener());
+                            chatCreated[0] = Boolean.TRUE;
+                            System.err.println("-----" + chat.toString());
+
+                        }
+                    });
+            // this should stop as soon as new chat is created
+            while (!chatCreated[0]) {
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+            enterChatLoop(gChat[0]);
+//            return gChat[0];
+        });
+        thread.start();
+        return thread;
+    }
+
+    public static AbstractXMPPConnection connectAndLogin(String username, String password, String domain, String host, String port) throws IOException, InterruptedException, XMPPException, SmackException {
         // Create a connection to the jabber.org server on a specific port.
         XMPPTCPConnectionConfiguration config = XMPPTCPConnectionConfiguration.builder()
                 .setUsernameAndPassword(username, password)
-                .setXmppDomain(XMPP_DOMAIN)
+                .setXmppDomain(domain)
                 .setSecurityMode(ConnectionConfiguration.SecurityMode.disabled) // Do not disable TLS except for test purposes!
-//                .setDebuggerEnabled(true)
-//                .setHost("earl.jabber.org")
                 .setHost(host)
                 .setPort(Integer.valueOf(port))
-                .setResource(device)
+//                .setResource(device)
                 .build();
 
         // SASL is already configured here for user from config
@@ -64,48 +138,12 @@ public class Application {
         System.err.println("connecting to server: " + host + " : " + port);
         connection.connect();
         connection.login();
-        System.err.println("Logging in to server as: " + connection.getUser().toString());
-
-
-        ChatManager chatManager = ChatManager.getInstanceFor(connection);
-
-
+        System.err.println("Logged in to server as: " + connection.getUser().toString());
         if(connection.isAuthenticated() )
         {
             System.err.println("Auth done");
         }
-
-        if (writeMsg.equals("true")){
-            System.err.println("Creating chat");
-            EntityBareJid jid = JidCreate.entityBareFrom(partnerJid);
-            System.err.println("Creating Chat with: " + jid.toString());
-            Chat chat = chatManager.createChat(jid, new LoggingMsgListener());
-
-            enterChatLoop(chat);
-        }else {
-            final org.jivesoftware.smack.chat.Chat[] gChat = {null};
-            final Boolean[] chatCreated = {Boolean.FALSE};
-            System.err.println("Waiting for chat");
-            chatManager.addChatListener(
-                    new ChatManagerListener() {
-                        @Override
-                        public void chatCreated(Chat chat, boolean createdLocally)
-                        {
-                            gChat[0] = chat;
-                            System.err.println("New Chat created");
-                            chat.addMessageListener(new LoggingMsgListener());
-                            chatCreated[0] =Boolean.TRUE;
-                            System.err.println(chat.toString());
-
-                        }
-                    });
-            // this should stop as soon as new chat is created
-            while (!chatCreated[0]){
-                Thread.sleep(100);
-            }
-            enterChatLoop(gChat[0]);
-        }
-
+        return connection;
     }
 
     static class LoggingMsgListener implements ChatMessageListener{
@@ -116,13 +154,17 @@ public class Application {
         }
     }
 
+    // replace with chat window opening
     public static void enterChatLoop(Chat chat)  {
+        waitForFreeChat();
         System.err.println("Entering chat loop");
         Scanner scanner = new Scanner(System.in);
         while (true) {
             String msg = scanner.next();
             if (msg.equals("q")) {
                 chat.close();
+                scanner.close();
+                doneChatting();
                 break;
             }
             System.err.println("Sending msg: " + msg);
@@ -135,6 +177,22 @@ public class Application {
             }
         }
 
+    }
+
+    public static synchronized void doneChatting(){
+        chatting = Boolean.FALSE;
+    }
+
+    public static synchronized void waitForFreeChat(){
+        while (chatting){
+            try {
+                System.out.println("Waiting for ending chat...");
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+        chatting = Boolean.TRUE;
     }
 
 //    /**
