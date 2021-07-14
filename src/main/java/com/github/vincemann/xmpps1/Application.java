@@ -42,7 +42,7 @@ public class Application {
         chatManager.addIncomingListener(new LoggingIncomingMsgListener());
         inputHandler = new InputHandler(new MenuLineConsumer());
         inputHandler.start();
-        addChatListener();
+        addIncomingChatListener();
     }
 
     public static void startChat(String chatPartner) {
@@ -53,10 +53,9 @@ public class Application {
         } catch (XmppStringprepException e) {
             throw new RuntimeException(e);
         }
-        System.err.println("Creating Chat with: " + jid.toString());
+        System.out.println("Creating Chat with: " + jid.toString());
         startedChat = Boolean.TRUE;
         Chat chat = chatManager.chatWith(jid);
-//        enterChatLoop(chat);
         inputHandler.switchLineConsumer(new ChatLineConsumer(chat));
     }
 
@@ -67,18 +66,18 @@ public class Application {
         System.out.println(sb.toString());
     }
 
-    public static void addChatListener() throws InterruptedException {
+    public static void addIncomingChatListener() throws InterruptedException {
 
         chatManager.addIncomingListener(new IncomingChatMessageListener() {
             @Override
             public void newIncomingMessage(EntityBareJid entityBareJid, Message message, Chat chat) {
                 if (startedChat) {
-//                    System.err.println("Ignoring msg bc started chat and already logged by other listener");
+//                    System.out.println("Ignoring msg bc started chat and already logged by other listener");
                     return;
                 } else {
                     // todo implement chatting boolean and waiting queue if another user tries to chat with user, while
                     if (chatPartner == null || !chatPartner.equals(entityBareJid)) {
-                        System.err.println("New Chat Partner: " + entityBareJid);
+                        System.out.println("New Chat Partner: " + entityBareJid);
                         chatPartner = entityBareJid;
 //                        waitForFreeChat();
                         inputHandler.switchLineConsumer(new ChatLineConsumer(chat));
@@ -110,12 +109,12 @@ public class Application {
 //                return true;
 //            }
 //        });
-        System.err.println("connecting to server: " + host + " : " + port);
+        System.out.println("connecting to server: " + host + " : " + port);
         connection.connect();
         connection.login();
-        System.err.println("Logged in to server as: " + connection.getUser().toString());
+        System.out.println("Logged in to server as: " + connection.getUser().toString());
         if (connection.isAuthenticated()) {
-            System.err.println("Auth done");
+            System.out.println("Auth done");
         }
         return connection;
     }
@@ -159,7 +158,7 @@ public class Application {
                     closeChat();
                     return;
                 }
-                System.err.println("Sending msg: " + line);
+                System.out.println("Sending msg: " + line);
                 chat.send(line);
             } catch (SmackException.NotConnectedException e) {
                 e.printStackTrace();
@@ -187,7 +186,6 @@ public class Application {
         }
 
         public synchronized void switchLineConsumer(LineConsumer lineConsumer) {
-//            this.interrupt();
             this.lineConsumer = lineConsumer;
         }
     }
@@ -215,7 +213,7 @@ public class Application {
     static class LoggingIncomingMsgListener implements IncomingChatMessageListener {
         @Override
         public void newIncomingMessage(EntityBareJid entityBareJid, Message message, Chat chat) {
-            System.out.println("Received message: "
+            System.err.println("Received message: "
                     + (message != null ? message.getBody() : "NULL" + " | from " + entityBareJid));
         }
     }
