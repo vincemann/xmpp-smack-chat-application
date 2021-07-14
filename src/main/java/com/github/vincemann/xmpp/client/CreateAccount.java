@@ -1,4 +1,4 @@
-package com.github.vincemann.xmpps1;
+package com.github.vincemann.xmpp.client;
 
 import org.jivesoftware.smack.AbstractXMPPConnection;
 import org.jivesoftware.smack.ConnectionConfiguration;
@@ -9,7 +9,7 @@ import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration;
 import org.jivesoftware.smackx.iqregister.AccountManager;
 import org.jxmpp.stringprep.XmppStringprepException;
 
-public class CreateAccount {
+//public class CreateAccount {
 
 //    public static void main(String[] args) throws XmppStringprepException {
 //        // Create a connection to the jabber.org server on a specific port.
@@ -42,4 +42,4 @@ public class CreateAccount {
 //            e.printStackTrace();
 //        }
 //    }
-}
+//}
