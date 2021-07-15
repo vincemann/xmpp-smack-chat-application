@@ -21,6 +21,7 @@ public class BiDirChatManager  implements IncomingChatMessageListener {
     private ChatManager chatManager;
     private String domain;
     private InputHandler inputHandler;
+//    private Boolean chatting = Boolean.FALSE;
 
     BiDirChatManager(ChatManager chatManager, String domain, InputHandler inputHandler) {
         this.chatManager = chatManager;
@@ -39,6 +40,7 @@ public class BiDirChatManager  implements IncomingChatMessageListener {
         this.chatPartner = jid;
         System.out.println("Creating Chat with: " + jid.toString());
         this.startedChat = Boolean.TRUE;
+//        this.chatting = Boolean.TRUE;
         this.chat = chatManager.chatWith(jid);
         inputHandler.switchLineConsumer(new ChatLineConsumer(this));
     }
@@ -65,8 +67,9 @@ public class BiDirChatManager  implements IncomingChatMessageListener {
         }
         System.out.println("chat closed");
         inputHandler.switchLineConsumer(new MenuLineConsumer(this));
-        chatPartner = null;
-        startedChat = Boolean.FALSE;
+        this.chatPartner = null;
+        this.startedChat = Boolean.FALSE;
+//        this.chatting = Boolean.FALSE;
     }
 
     @Override
@@ -76,7 +79,7 @@ public class BiDirChatManager  implements IncomingChatMessageListener {
             return;
         } else {
             // todo implement chatting boolean and waiting queue if another user tries to chat with user, while
-            if (chatPartner == null || !chatPartner.equals(entityBareJid)) {
+            if (chatPartner == null || !chatPartner.equals(entityBareJid)/* && !chatting*/) {
                 System.out.println("New Chat Partner: " + entityBareJid);
                 this.chatPartner = entityBareJid;
                 this.chat=chat;

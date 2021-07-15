@@ -21,7 +21,7 @@ public class ClientApplication {
         int index = 0;
         String username =   args[index++];
         String password =   args[index++];
-        String domain =            args[index++];
+        String domain =     args[index++];
         String host =       args[index++];
         String port =       args[index++];
 

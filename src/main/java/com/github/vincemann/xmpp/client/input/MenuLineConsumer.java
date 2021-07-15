@@ -27,7 +27,13 @@ public class MenuLineConsumer  implements LineConsumer {
         if (menuInput.startsWith(OPEN_CHAT_MENU_OPTION)) {
             String chatPartner = menuInput.split(" ")[1];
             biDirChatManager.startChat(chatPartner);
-        } else {
+        }
+        else if (menuInput.equals("q")) {
+            System.out.println("exiting program");
+            System.exit(0);
+            return;
+        }
+        else {
             System.out.println("Invalid input");
         }
     }
