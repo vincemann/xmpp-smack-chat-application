@@ -47,7 +47,7 @@ listen:
     port: 5443
     ip: "::"
     module: ejabberd_http
-    tls: true
+    tls: false
     request_handlers:
       "/admin": ejabberd_web_admin
       "/api": mod_http_api
@@ -70,6 +70,7 @@ listen:
 
 s2s_use_starttls: optional
 
+# define acl entities, below we configure the rights of these entities
 acl:
   local:
     user_regexp: ""
@@ -78,9 +79,12 @@ acl:
       - 127.0.0.0/8
       - ::1/128
       - ::FFFF:127.0.0.1/128
+  # tell ejabberd who's the admin
   admin:
     user:
       - admin@debian.local
+
+
 
 access_rules:
   local:
@@ -90,15 +94,21 @@ access_rules:
     allow: all
   announce:
     allow: admin
+  # admin can access web admin 
   configure:
     allow: admin
+  register:
+    allow: admin
+    allow: loopback
   muc_create:
     allow: local
   pubsub_createnode:
     allow: local
   trusted_network:
     allow: loopback
+    allow: admin
 
+# ejabberdctl can do anything
 api_permissions:
   "console commands":
     from:
@@ -107,16 +117,20 @@ api_permissions:
     what: "*"
   "admin access":
     who:
-      access:
-        allow:
-          acl: loopback
-          acl: admin
-      oauth:
-        scope: "ejabberd:admin"
-        access:
-          allow:
-            acl: loopback
-            acl: admin
+      #access:
+      #  allow:
+      #    acl: loopback
+      #    acl: admin
+      #oauth:
+      #  scope: "ejabberd:admin"
+      #  access:
+      #    allow:
+      #      acl: loopback
+      #      acl: admin
+      - admin
+      - oauth:
+        - scope: "ejabberd:admin"
+        - admin
     what:
       - "*"
       - "!stop"
@@ -125,8 +139,12 @@ api_permissions:
     who:
       ip: 127.0.0.1/8
     what:
-      - status
-      - connected_users_number
+      # changed by me -> api calls from localhost can do almost anything
+      - "*"
+      - "!stop"
+      - "!start"
+      #- status
+      #- connected_users_number
 
 shaper:
   normal: 1000
